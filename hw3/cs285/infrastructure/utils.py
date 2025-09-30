@@ -2,7 +2,7 @@ from collections import OrderedDict
 import numpy as np
 import copy
 from cs285.networks.mlp_policy import MLPPolicy
-import gym
+import gymnasium as gym
 import cv2
 from cs285.infrastructure import pytorch_util as ptu
 from typing import Dict, Tuple, List
@@ -15,30 +15,34 @@ def sample_trajectory(
     env: gym.Env, policy: MLPPolicy, max_length: int, render: bool = False
 ) -> Dict[str, np.ndarray]:
     """Sample a rollout in the environment from a policy."""
-    ob = env.reset()
+    ob, _ = env.reset()
     obs, acs, rewards, next_obs, terminals, image_obs = [], [], [], [], [], []
     steps = 0
 
     while True:
         # render an image
+        # if render:
+        #     try:
+        #         img = env.render()
+        #         image_obs.append(cv2.resize(img, dsize=(250, 250), interpolation=cv2.INTER_CUBIC))
+        #     except Exception as e:
+        #         print(f"Rendering failed: {e}")
         if render:
             if hasattr(env, "sim"):
                 img = env.sim.render(camera_name="track", height=500, width=500)[::-1]
             else:
-                img = env.render(mode="rgb_array")
-            
+                img = env.render()   
             if isinstance(img, list):
                 img = img[0]
-
             image_obs.append(
                 cv2.resize(img, dsize=(250, 250), interpolation=cv2.INTER_CUBIC)
             )
-
         # TODO use the most recent ob to decide what to do
         ac = policy.get_action(ob)
 
         # TODO: take that action and get reward and next ob
-        next_ob, rew, done, info = env.step(ac)
+        next_ob, rew, terminated, truncated, info = env.step(ac)
+        done: bool = True if terminated or truncated else False
 
         # TODO rollout can end due to done, or due to max_length
         steps += 1
@@ -61,7 +65,7 @@ def sample_trajectory(
     if "episode" in info:
         episode_statistics.update(info["episode"])
 
-    env.close()
+    # env.close()   //Can't render video if closed
 
     return {
         "observation": np.array(obs, dtype=np.float32),

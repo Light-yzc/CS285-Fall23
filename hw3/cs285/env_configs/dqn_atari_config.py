@@ -1,8 +1,9 @@
 from typing import Optional, Tuple
 
-import gym
-from gym.wrappers.frame_stack import FrameStack
-
+import gymnasium  as gym
+# from gymnasium.wrappers.frame_stack import FrameStack
+import ale_py
+gym.register_envs(ale_py)
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,6 +15,7 @@ from cs285.env_configs.schedule import (
 )
 from cs285.infrastructure.atari_wrappers import wrap_deepmind
 import cs285.infrastructure.pytorch_util as ptu
+from gymnasium.wrappers import TimeLimit
 
 
 class PreprocessAtari(nn.Module):
@@ -88,9 +90,10 @@ def atari_dqn_config(
     )
 
     def make_env(render: bool = False):
-        return wrap_deepmind(
-            gym.make(env_name, render_mode="rgb_array" if render else None)
+        env =  wrap_deepmind(
+            gym.make(env_name, render_mode="rgb_array")
         )
+        return TimeLimit(env=env,  max_episode_steps=target_update_period)
 
     log_string = "{}_{}_d{}_tu{}_lr{}".format(
         exp_name or "dqn",

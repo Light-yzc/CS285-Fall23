@@ -1,6 +1,6 @@
 from typing import Tuple, Optional
 
-import gym
+import gymnasium as gym
 
 import numpy as np
 import torch
@@ -10,9 +10,10 @@ from cs285.networks.mlp_policy import MLPPolicy
 from cs285.networks.state_action_value_critic import StateActionCritic
 import cs285.infrastructure.pytorch_util as ptu
 
-from gym.wrappers.rescale_action import RescaleAction
-from gym.wrappers.clip_action import ClipAction
-from gym.wrappers.record_episode_statistics import RecordEpisodeStatistics
+from gymnasium.wrappers import RecordEpisodeStatistics, ClipAction, RescaleAction
+# from gym.wrappers.rescale_action import RescaleAction
+# from gym.wrappers.clip_action import ClipAction
+# from gym.wrappers.record_episode_statistics import RecordEpisodeStatistics
 
 
 def sac_config(
@@ -31,7 +32,7 @@ def sac_config(
     discount: float = 0.99,
     use_soft_target_update: bool = False,
     target_update_period: Optional[int] = None,
-    soft_target_update_rate: Optional[float] = None,
+    soft_target_update_rate: Optional[float] = 0.005,
     # Actor-critic configuration
     actor_gradient_type="reinforce",  # One of "reinforce" or "reparametrize"
     num_actor_samples: int = 1,
@@ -42,7 +43,7 @@ def sac_config(
     # Soft actor-critic
     backup_entropy: bool = True,
     use_entropy_bonus: bool = True,
-    temperature: float = 0.1,
+    temperature: float = 0.05,
     actor_fixed_std: Optional[float] = None,
     use_tanh: bool = True,
 ):
@@ -94,7 +95,7 @@ def sac_config(
             ClipAction(
                 RescaleAction(
                     gym.make(
-                        env_name, render_mode="single_rgb_array" if render else None
+                        env_name, render_mode="rgb_array" if render else None
                     ),
                     -1,
                     1,

@@ -1,7 +1,9 @@
 from typing import Optional, Tuple
 
-import gym
-from gym.wrappers.record_episode_statistics import RecordEpisodeStatistics
+import gymnasium as gym
+from gymnasium.wrappers import RecordEpisodeStatistics, ClipAction, RescaleAction
+
+# from gymnasium.wrappers.record_episode_statistics import RecordEpisodeStatistics
 
 import numpy as np
 import torch

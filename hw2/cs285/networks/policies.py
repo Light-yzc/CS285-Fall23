@@ -59,8 +59,13 @@ class MLPPolicy(nn.Module):
     def get_action(self, obs: np.ndarray) -> np.ndarray:
         """Takes a single observation (as a numpy array) and returns a single action (as a numpy array)."""
         # TODO: implement get_action
-        action = None
-
+        obs = ptu.from_numpy(obs).unsqueeze(0)
+        # if self.discrete:
+        #     action = torch.argmax(self.forward(obs), dim=1)
+        # else:
+        action =  self.forward(obs).sample()
+        action = ptu.to_numpy(action.squeeze(0))
+        # print('action_shape:{}'.format(action))
         return action
 
     def forward(self, obs: torch.FloatTensor):
@@ -69,17 +74,26 @@ class MLPPolicy(nn.Module):
         able to differentiate through it. For example, you can return a torch.FloatTensor. You can also return more
         flexible objects, such as a `torch.distributions.Distribution` object. It's up to you!
         """
+        out = 0.0
         if self.discrete:
             # TODO: define the forward pass for a policy with a discrete action space.
-            pass
+            # pass
+            out = self.logits_net(obs)
+            out = distributions.Categorical(logits=out)
         else:
             # TODO: define the forward pass for a policy with a continuous action space.
-            pass
-        return None
+            # pass
+            mean = self.mean_net(obs)
+            std = torch.exp(self.logstd)
+            out = distributions.Normal(mean, std)
+            # out = distribution.rsample()
+        # print('out_shape:{}'.format(out.shape))
+        return out
 
     def update(self, obs: np.ndarray, actions: np.ndarray, *args, **kwargs) -> dict:
         """Performs one iteration of gradient descent on the provided batch of data."""
         raise NotImplementedError
+
 
 
 class MLPPolicyPG(MLPPolicy):
@@ -94,11 +108,24 @@ class MLPPolicyPG(MLPPolicy):
         """Implements the policy gradient actor update."""
         obs = ptu.from_numpy(obs)
         actions = ptu.from_numpy(actions)
-        advantages = ptu.from_numpy(advantages)
-
+        advantages = ptu.from_numpy(advantages).detach()
+        pred_act = self.forward(obs)
+        # print('input_action_shape:{}'.format(actions.shape))
+        # if self.discrete:
+        #     probs = torch.nn.functional.softmax(pred_act, dim=1)
+        #     act_prob = probs[torch.arange(probs.shape[0],device=probs.device), actions.long()]
+        #     act_prob = torch.log(act_prob)
+        # else:
+        act_prob = pred_act.log_prob(actions).sum(dim=-1)
+            # print(act_prob.shape)
+            # print(advantages.shape)
+            # print('//////////////')
+        loss = -torch.mean(act_prob * advantages)
         # TODO: implement the policy gradient actor update.
-        loss = None
-
+        # loss = None
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
         return {
             "Actor Loss": ptu.to_numpy(loss),
         }

@@ -7,8 +7,8 @@ import cs285.env_configs
 import os
 import time
 
-import gym
-from gym import wrappers
+import gymnasium as gym
+from gymnasium import wrappers
 import numpy as np
 import torch
 from cs285.infrastructure import pytorch_util as ptu
@@ -18,7 +18,7 @@ from cs285.infrastructure import utils
 from cs285.infrastructure.logger import Logger
 from cs285.infrastructure.replay_buffer import MemoryEfficientReplayBuffer, ReplayBuffer
 
-from scripting_utils import make_logger, make_config
+from cs285.scripts.scripting_utils import make_logger, make_config
 
 MAX_NVIDEO = 2
 
@@ -75,7 +75,7 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
     def reset_env_training():
         nonlocal observation
 
-        observation = env.reset()
+        observation, _ = env.reset()
 
         assert not isinstance(
             observation, tuple
@@ -91,24 +91,26 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
         epsilon = exploration_schedule.value(step)
         
         # TODO(student): Compute action
-        action = ...
+        action = agent.get_action(observation, epsilon)
 
         # TODO(student): Step the environment
-
-        next_observation = np.asarray(next_observation)
-        truncated = info.get("TimeLimit.truncated", False)
-
+        next_ob, rew, terminated, truncated, info  = env.step(action)
+        next_observation = np.asarray(next_ob)
+        episode_is_over = terminated or truncated
+        done = True if terminated else False
         # TODO(student): Add the data to the replay buffer
         if isinstance(replay_buffer, MemoryEfficientReplayBuffer):
             # We're using the memory-efficient replay buffer,
             # so we only insert next_observation (not observation)
-            ...
+            if stacked_frames == True:
+                next_ob = next_ob[-1]
+            replay_buffer.insert(action, rew, next_ob, np.array(done))
         else:
             # We're using the regular replay buffer
-            ...
+            replay_buffer.insert(observation, action, rew, next_observation, np.array(done))
 
         # Handle episode termination
-        if done:
+        if episode_is_over:
             reset_env_training()
 
             logger.log_scalar(info["episode"]["r"], "train_return", step)
@@ -119,13 +121,21 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
         # Main DQN training loop
         if step >= config["learning_starts"]:
             # TODO(student): Sample config["batch_size"] samples from the replay buffer
-            batch = ...
+            batch = replay_buffer.sample(config["batch_size"])
+
 
             # Convert to PyTorch tensors
             batch = ptu.from_numpy(batch)
 
             # TODO(student): Train the agent. `batch` is a dictionary of numpy arrays,
-            update_info = ...
+            update_info = agent.update(
+                    obs=batch["observations"],
+                    action=batch["actions"],
+                    reward=batch["rewards"],
+                    next_obs=batch["next_observations"],
+                    done=batch["dones"],
+                    step=step,
+                )
 
             # Logging code
             update_info["epsilon"] = epsilon
@@ -139,10 +149,11 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
         if step % args.eval_interval == 0:
             # Evaluate
             trajectories = utils.sample_n_trajectories(
-                eval_env,
-                agent,
-                args.num_eval_trajectories,
-                ep_len,
+                env = eval_env,
+                policy = agent,
+                ntraj = int(args.num_eval_trajectories),
+                max_length = ep_len,
+                render = True
             )
             returns = [t["episode_statistics"]["r"] for t in trajectories]
             ep_lens = [t["episode_statistics"]["l"] for t in trajectories]
@@ -196,7 +207,6 @@ def main():
 
     config = make_config(args.config_file)
     logger = make_logger(logdir_prefix, config)
-
     run_training_loop(config, logger, args)
 
 
